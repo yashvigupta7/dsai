@@ -24,11 +24,14 @@ jobs:
       
       - name: Setup SSH for private submodule
         run: |
-          # Check if SSH key secret exists and is not empty 
+          # Install openssh-client if not available (needed for SSH in Docker)
+          apt-get update -qq && apt-get install -y -qq openssh-client > /dev/null 2>&1 || true
+          
+          # Check if SSH key secret exists and is not empty
           SSH_KEY="${{ secrets.SUBMODULE_SSH_KEY }}"
           
-          # Trim whitespace and check if empty
-          SSH_KEY=$(echo "$SSH_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          # Trim whitespace and check if empty (using basic shell, not sed)
+          SSH_KEY=$(echo "$SSH_KEY" | xargs)
           
           if [ -z "$SSH_KEY" ] || [ "$SSH_KEY" = "" ]; then
             echo "SUBMODULE_SSH_KEY secret not found or empty. Assuming canvastest is public or using HTTPS."
@@ -62,7 +65,7 @@ jobs:
           fi
           
           # Add GitHub to known hosts
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 600 ~/.ssh/known_hosts
           
           # Start SSH agent and add key
@@ -72,7 +75,7 @@ jobs:
           if ! ssh-add ~/.ssh/id_rsa 2>&1; then
             echo "Error: Failed to add SSH key to agent."
             echo "Key file contents (first 100 chars):"
-            head -c 100 ~/.ssh/id_rsa
+            head -c 100 ~/.ssh/id_rsa || echo "Could not read key file"
             echo ""
             echo "This may indicate the key is invalid, corrupted, or improperly formatted."
             exit 1
