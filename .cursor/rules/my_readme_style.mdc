@@ -1,0 +1,167 @@
+---
+description: README formatting preferences for headers, icons, code blocks, tone, and file references
+globs: ["**/README*.md"]
+alwaysApply: false
+---
+
+# README Formatting Preferences
+
+## Headers
+
+### Header Structure
+- Use `#` for main title: `# README '/folder/filename'`
+- Use `##` for main sections (Activities, Readings, etc.)
+- Use `###` for subsections
+- Maximum two heading levels (`##` and `###`)
+- Include icons in section headers when appropriate: `## 🚀 Deployment`, `## 📚 Readings`
+
+### Banner and Footer
+- Start with banner image: `![Banner Image](relative/path/to/image.png)`
+- End with footer image: `![Footer Image](relative/path/to/image.png)`
+- Include "Back to Top" link in footer: `← 🏠 [Back to Top](#Table-of-Contents)`
+
+## Icons
+
+### Icon Usage Guidelines
+- **Use icons frequently** throughout the document for visual interest and clarity
+- Common icon patterns:
+  - 🚨 for critical/important sections
+  - ✅ for completed items or checklists
+  - ⚠️ for warnings or important notes
+  - 📚 for documentation sections
+  - 🔧 for technical/setup sections
+  - 💡 for tips or insights
+  - 🚀 for deployment or launch sections
+  - 📋 for lists or checklists
+- Add icons to section headers, list items, and key points
+- Use icons to mark section headers: `## 🚀 Deployment`, `## 📚 Readings`
+
+## Code Blocks
+
+### Code Block Formatting
+- Use appropriate syntax highlighting: ` ```r `, ` ```python `, ` ```bash `, ` ```markdown `
+- Reference the actual file above or below code blocks
+- Include comments in code to explain non-obvious steps
+- Keep code examples practical and runnable
+- Format file references near code blocks: `See [`filename.ext`](path/to/file.ext) for the implementation`
+
+### Inline Code
+- Use backticks for:
+  - File names: `` `app.R` ``
+  - Function names: `` `fetch_data()` ``
+  - Commands: `` `npm install` ``
+  - Code snippets: `` `const x = 1` ``
+
+## Tone
+
+### Writing Style
+- **Concise**: Get to the point quickly; avoid unnecessary words
+- **Humble**: Don't assume expertise; explain concepts clearly
+- **Direct**: State facts directly without filler phrases
+
+### Phrases to Avoid
+Never use phrases like:
+- "it is obvious"
+- "it is critical"
+- "clearly"
+- "obviously"
+- "as you can see"
+- "it goes without saying"
+
+### Instead Use
+- Direct statements: "This step configures the API endpoint" (not "It is critical that you configure...")
+- Factual descriptions: "This concept is used throughout the course" (not "It is obvious that...")
+
+## File References
+
+### Activity/Reading/Lab Files
+- Use human-readable names (titles) as link text with appropriate prefixes
+- Format: `[ACTIVITY: Human-Readable Title](ACTIVITY_filename.md)`
+- Format: `[READ: Human-Readable Title](READ_filename.md)`
+- Format: `[LAB: Human-Readable Title](LAB_filename.md)`
+- Examples:
+  - ✅ `[ACTIVITY: Run Ollama Locally](ACTIVITY_ollama_local.md)`
+  - ✅ `[READ: Finding APIs](READ_find_apis.md)`
+  - ✅ `[LAB: Build an AI-Powered Data Reporter](LAB_ai_reporter.md)`
+  - ❌ ``[`ACTIVITY_ollama_local.md`](ACTIVITY_ollama_local.md)``
+  - ❌ `[Run Ollama Locally](ACTIVITY_ollama_local.md)` (missing prefix)
+
+### Code/Script Files
+- Use filename in backticks as link text
+- Format: ``[`filename.ext`](relative/path/to/file.ext)``
+- Examples:
+  - ✅ ``See [`functions.R`](functions.R) for helper functions``
+  - ✅ ``[`app.R`](app.R) — Main Shiny application``
+- Always include relative hyperlinks when discussing files
+
+### File Reference Placement
+- Reference files above or below code blocks
+- Include brief descriptions after file links when helpful
+- Use relative paths consistently
+
+## Formatting
+
+### Text Emphasis
+- **Bold** (`**text**`) for:
+  - Key terms
+  - File names
+  - Important concepts
+  - Section labels
+- *Italics* (`*text*`) for:
+  - Subtle emphasis
+  - Alternative phrasing
+  - Course names or titles
+
+### Lists
+- Use numbered lists (`1.`, `2.`, `3.`) for sequential steps
+- Use bullet points (`-`) for informational items
+- Use checkboxes (`- [ ]`) for actionable items
+- Add icons to list items when they enhance clarity
+- Indent sub-items with `-` for related files under activities
+
+### Blockquotes
+- Use blockquotes (`>`) for:
+  - Brief topic descriptions after title
+  - Important notes or callouts
+  - Course descriptions
+
+## Examples
+
+### Good Header with Icon
+```markdown
+## 🚀 Deployment
+
+Follow these steps to deploy your application...
+```
+
+### Good File Reference (Activity)
+```markdown
+1. [ACTIVITY: Run Ollama Locally](ACTIVITY_ollama_local.md)
+   - [`01_ollama.sh`](01_ollama.sh) — Start Ollama server
+```
+
+### Good File Reference (Code)
+```markdown
+See the [`plumber.R`](plumber.R) file for the API implementation.
+```
+
+### Good Code Block with Reference
+```markdown
+See [`functions.R`](functions.R) for the implementation:
+
+```r
+fetch_data <- function(url) {
+  # Implementation here
+}
+```
+```
+
+### Good Tone
+```markdown
+**Important**: Make sure to set your API key in the `.env` file before running the script.
+```
+
+### Avoid This Tone
+```markdown
+It is critical that you understand this concept, as it is obvious that...
+```
