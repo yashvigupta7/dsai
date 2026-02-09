@@ -1,0 +1,12 @@
+Title: FDA Device Recall Explorer
+Description: Shiny dashboard that queries the FDA Device Recall API by year
+    range and displays results in an interactive table. Built for SYSEN 5381.
+Version: 1.0.0
+Depends:
+    shiny,
+    bslib,
+    httr,
+    jsonlite,
+    DT,
+    dplyr,
+    lubridate
