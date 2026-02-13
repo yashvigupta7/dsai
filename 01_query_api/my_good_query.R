@@ -7,8 +7,8 @@ library(httr)
 library(jsonlite)
 
 # 1. Load API Key
-readRenviron("/Users/srinjoy/dsai/01_query_api/.env")
-api_key <- Sys.getenv("API_KEY")
+readRenviron("/Users/yashvi711/Desktop/Cornell/Classes/dsai/01_query_api/.env")
+api_key <- Sys.getenv("TEST_API_KEY")
 
 # 2. Define Endpoint
 base_url <- "https://api.fda.gov/device/recall.json"
