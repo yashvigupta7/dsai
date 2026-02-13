@@ -1,0 +1,36 @@
+---
+description: README formatting preferences (headers, icons, code blocks, tone, file references)
+globs: ["**/README*.md"]
+alwaysApply: false
+---
+
+# README Formatting Preferences
+
+## Headers
+- **H1**: Use backticks for module/path: `` # README `/query_api` `` or `` # `dsai` - Title ``. One line, then a short blockquote description.
+- **H2** for main sections: `## Table of Contents`, `## Activities`, `## Readings`. Use `###` only for subsections when needed.
+- Separate major sections with a horizontal rule: `---`.
+
+## Icons and images
+- **Banner**: Top of file, `![Banner Image](path/to/icons.png)` (relative path, e.g. `../docs/images/icons.png` in subfolders).
+- **Footer**: Before the final `---`, `![Footer Image](../docs/images/icons.png)`.
+- **Emoji in headings**: Optional; use sparingly in module READMEs. Root README may use emoji (e.g. 📚 QUICK LINKS, 🎯 ABOUT).
+
+## Code and inline formatting
+- **Inline code**: Backticks for file names, paths, commands, and identifiers: `` `01_example_curl.sh` ``, `` `/query_api` ``.
+- **Code blocks**: Use fenced blocks with language when showing snippets; mention the source file above or below.
+- **Emphasis**: **Bold** for key terms and file names; *italics* for subtle emphasis.
+
+## File references
+- **ACTIVITY / READ / LAB links**: Human-readable title as link text with prefix; filename in URL.  
+  `[ACTIVITY: Your First API Query](ACTIVITY_first_query.md)`, `[READ: Finding APIs](READ_find_apis.md)`, `[LAB: Develop a Meaningful API Query](LAB_your_good_api_query.md)`.
+- **Script/code files**: Filename in backticks as link text: `` [`02_example.py`](02_example.py) — Python example ``. Optional short description after an em dash.
+- Always use relative links. Sub-items under numbered activities are indented with `-`.
+
+## Tone
+- **Concise and direct**: Short sentences; README as navigation, not long prose.
+- **Avoid**: "obviously", "clearly", "it is critical", "as you can see".
+- **Prefer**: Direct statements and numbered "Complete these activities in order" lists.
+
+## Footer
+- End with: `← 🏠 [Back to Top](#Table-of-Contents)` (anchor matches your ToC heading).
