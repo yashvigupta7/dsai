@@ -171,8 +171,17 @@ result = ai_response.json()
 # Extract the model's text reply
 report = result["output"][0]["content"][0]["text"]
 
-# 4. Display the AI-Generated Report #################################
+# 4. Save and Display the AI-Generated Report #################################
 
+# Save the report as a markdown file
+# This makes it easy to view on GitHub or in any markdown reader
+report_path = "03_query_ai/LAB_ai_reporter_report.md"
+with open(report_path, "w", encoding="utf-8") as f:
+    f.write(report)
+
+print(f"✅ Saved report to {report_path}\n")
+
+# Also print the report to the console
 print("=" * 60)
 print("📝 AI-GENERATED FDA DEVICE RECALL REPORT")
 print("=" * 60)
