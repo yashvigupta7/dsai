@@ -12,7 +12,7 @@ Draw a **process diagram** for your homework tool (inputs → steps → outputs)
 
 ### 🧱 Process Diagram
 
-- [ ] Choose your tool’s main **inputs** (e.g., raw data, notes, CSV file).
+- [ ] Choose your tool's main **inputs** (e.g., raw data, notes, CSV file).
 - [ ] Choose 2–4 **steps** (e.g., SUMMARIZE, FORMAT, INTERPRET, FIX) that turn inputs into outputs.
 - [ ] Choose the **output(s)** (e.g., press release, cleaned CSV, quiz).
 - [ ] Draw the process **by hand** or **in Mermaid**. Keep the diagram simple.
