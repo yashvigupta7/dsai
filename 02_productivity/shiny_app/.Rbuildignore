@@ -1,0 +1,5 @@
+^manifest\.json$
+^rsconnect$
+^\.Rproj\.user$
+^run\.R$
+^README\.md$
