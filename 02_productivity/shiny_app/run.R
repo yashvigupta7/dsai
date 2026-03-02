@@ -1,19 +1,36 @@
-#' @name run.R
-#' @title Launch the FDA Device Recall Explorer
-#' @description
-#' Quick launcher for the Shiny app. Run this from RStudio or the R console.
-#' Make sure your working directory is set to the shiny_app/ folder first.
+# -----------------------------------------------------------------------------
+# Run FDAi - AI-Powered FDA Device Recalls Dashboard
+# Simple launcher script - checks dependencies and runs the app
+# -----------------------------------------------------------------------------
 
-# Install any missing packages before launching
-required_pkgs = c("shiny", "bslib", "httr", "jsonlite", "DT", "dplyr", "lubridate")
-missing = required_pkgs[!sapply(required_pkgs, requireNamespace, quietly = TRUE)]
-if (length(missing) > 0) {
-  message("Installing missing packages: ", paste(missing, collapse = ", "))
-  install.packages(missing, repos = "https://cloud.r-project.org")
+# Add user library to path (for packages installed in user directory)
+.libPaths(c("~/Library/R/arm64/4.4/library", .libPaths()))
+
+# Check and install required packages
+required_packages <- c("shiny", "bslib", "httr", "jsonlite", "DT", "plotly", "dplyr", "markdown")
+
+missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+
+if (length(missing_packages) > 0) {
+  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
+  install.packages(missing_packages, repos = "https://cloud.r-project.org")
 }
 
-# Resolve the app directory (folder where this script lives)
-app_dir = "/Users/yashvi711/Desktop/Cornell/Classes/Spring 2026/SYSEN 5381/dsai/02_productivity/shiny_app"
+# Get the directory where this script is located
+# Works when sourced via source() from any working directory
+this_file <- function() {
+  # Look through call stack to find the sourced file path
+  for (i in sys.nframe():1) {
+    if (!is.null(sys.frame(i)$ofile)) {
+      return(normalizePath(sys.frame(i)$ofile))
+    }
+  }
+  # Fallback: assume current directory
+  return(NULL)
+}
 
-# Launch the app — opens in your default browser
-shiny::runApp(appDir = app_dir, launch.browser = TRUE)
+script_path <- this_file()
+app_dir <- if (!is.null(script_path)) dirname(script_path) else getwd()
+
+# Run the app from the correct directory
+shiny::runApp(app_dir)

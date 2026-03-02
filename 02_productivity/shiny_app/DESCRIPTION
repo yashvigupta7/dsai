@@ -1,12 +1,19 @@
-Title: FDA Device Recall Explorer
-Description: Shiny dashboard that queries the FDA Device Recall API by year
-    range and displays results in an interactive table. Built for SYSEN 5381.
-Version: 1.0.0
+Package: fdai
+Title: FDAi - AI-Powered FDA Device Recalls Dashboard
+Version: 2.0.0
+Description: A Shiny web application that queries the openFDA API for medical
+    device recalls, displays interactive visualizations, and generates
+    AI-powered executive reports via OpenAI.
+Authors@R: person("Student", role = c("aut", "cre"))
 Depends:
-    shiny,
-    bslib,
-    httr,
-    jsonlite,
-    DT,
-    dplyr,
-    lubridate
+    R (>= 4.0.0)
+Imports:
+    shiny (>= 1.7.0),
+    bslib (>= 0.5.0),
+    httr (>= 1.4.0),
+    jsonlite (>= 1.8.0),
+    DT (>= 0.27),
+    plotly (>= 4.10.0),
+    dplyr (>= 1.1.0),
+    markdown (>= 1.1)
+License: MIT
