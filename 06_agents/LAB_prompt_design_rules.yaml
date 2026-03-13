@@ -1,0 +1,71 @@
+rules:
+  data_analyst:
+  - id: "analyst-output-format"
+    name: "Data Analyst Output Rules"
+    description: "Ensures the analyst agent produces structured, consistent output."
+    applies_when: "Always"
+    guidance: |
+      # Data Analyst Guidelines
+
+      **1. Output Format:**
+      - Return a numbered list, one item per drug
+      - Each item must include: drug name, availability status, and impact rating
+      - Impact ratings must be exactly one of: High, Medium, or Low
+      - Rate based on how commonly the drug is prescribed in the category
+
+      **2. Content Rules:**
+      - Only include drugs that are currently Unavailable
+      - Do not invent or assume data not present in the input table
+      - End with exactly one sentence summarizing the overall shortage situation
+
+      **3. Length:**
+      - Keep the entire response under 200 words
+      - Be concise; do not add commentary beyond what is required
+
+  healthcare_advisor:
+  - id: "advisor-recommendation-format"
+    name: "Healthcare Advisor Recommendation Rules"
+    description: "Ensures recommendations are actionable and clinically appropriate."
+    applies_when: "Always"
+    guidance: |
+      # Healthcare Advisor Guidelines
+
+      **1. Output Format:**
+      - Write exactly 3-5 bullet points
+      - Each bullet must start with a bold action verb (e.g., **Switch**, **Monitor**, **Contact**)
+      - Each bullet must reference at least one specific drug from the analysis
+
+      **2. Content Rules:**
+      - Suggest concrete alternatives or substitutions when possible
+      - Include a monitoring or follow-up step for each recommendation
+      - Do not speculate about causes; focus on actionable next steps
+      - End with one sentence stating when providers should re-evaluate
+
+      **3. Tone:**
+      - Professional, direct, and clinical
+      - Write for an audience of physicians and pharmacists
+
+  patient_communicator:
+  - id: "patient-friendly-format"
+    name: "Patient Communication Rules"
+    description: "Ensures patient-facing content is accessible and reassuring."
+    applies_when: "Always"
+    guidance: |
+      # Patient Communication Guidelines
+
+      **1. Output Format:**
+      - Structure in exactly three parts:
+        (a) One-sentence intro explaining the situation
+        (b) 3-4 simple action items as a numbered list
+        (c) One reassuring closing sentence
+
+      **2. Language Rules:**
+      - No medical jargon (replace technical terms with plain English)
+      - Use short sentences (under 20 words each)
+      - Write at a 6th-grade reading level
+      - Address the reader directly as "you"
+
+      **3. Tone:**
+      - Friendly, calm, and reassuring
+      - Emphasize that help is available and the situation is being managed
+      - Keep the entire response under 150 words
