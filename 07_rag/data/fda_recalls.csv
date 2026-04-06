@@ -1,0 +1,16 @@
+recall_number,event_date_initiated,product_code,recalling_firm,root_cause_description,product_description
+Z-0001-2024,2024-01-15,BZG,Medtronic Inc,Software Design,Implantable cardiac defibrillator with faulty firmware causing intermittent failure to deliver therapy when ventricular fibrillation is detected
+Z-0045-2024,2024-02-03,DXB,Philips Healthcare,Component Failure,Patient monitoring system displaying inaccurate blood oxygen saturation readings due to defective sensor module
+Z-0112-2024,2024-02-20,FRN,Abbott Laboratories,Process Control,Insulin infusion pump delivering incorrect dosage amounts caused by calibration error during manufacturing
+Z-0189-2024,2024-03-11,DTX,Baxter International,Labeling,Hemodialysis machines shipped with incorrect user manual listing wrong priming volume specifications
+Z-0234-2024,2024-04-05,BSX,Boston Scientific,Material Design,Coronary stent system with coating degradation leading to premature drug elution and potential thrombosis
+Z-0298-2024,2024-04-22,QKQ,Siemens Healthineers,Software Design,CT scanner software miscalculating radiation dose resulting in patients receiving higher than prescribed exposure levels
+Z-0367-2024,2024-05-14,DYB,GE HealthCare,Component Failure,Ultrasound transducer probes with cracked housing allowing fluid ingress and risk of electrical shock
+Z-0401-2024,2024-06-01,FMF,Becton Dickinson,Process Control,Pre-filled saline flush syringes with compromised sterility barrier due to packaging seal defect
+Z-0455-2024,2024-06-28,NFT,Stryker Corporation,Material Design,Orthopedic hip implant femoral head showing premature wear releasing metallic debris into surrounding tissue
+Z-0502-2024,2024-07-15,BZG,Medtronic Inc,Software Design,Pacemaker programmer software failing to correctly display battery longevity estimates leading to unexpected device depletion
+Z-0578-2024,2024-08-09,MHX,Johnson and Johnson,Nonconforming Material,Surgical mesh with inconsistent tensile strength due to raw material variability from supplier
+Z-0623-2024,2024-09-03,DXB,Philips Healthcare,Software Design,Ventilator control software entering standby mode unexpectedly during active patient ventilation therapy
+Z-0689-2024,2024-10-12,QKQ,Siemens Healthineers,Use Error,MRI system gradient coil overheating during extended scan sequences due to inadequate thermal management design
+Z-0734-2024,2024-11-01,FRN,Abbott Laboratories,Component Failure,Continuous glucose monitor transmitter losing wireless connectivity intermittently causing gaps in blood sugar data
+Z-0801-2024,2024-12-05,DTX,Baxter International,Process Control,IV infusion pump occlusion alarm failing to trigger when fluid line is blocked during medication delivery
