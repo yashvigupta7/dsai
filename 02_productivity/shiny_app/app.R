@@ -230,6 +230,174 @@ call_openai <- function(prompt, api_key) {
   result$choices$message$content[[1]]
 }
 
+# ---- AI quality control (LAB_ai_quality_control: JSON criteria + Ollama/OpenAI) ----
+
+# Ollama defaults (see 09_text_analysis/02_ai_quality_control.R)
+OLLAMA_QC_PORT <- 11434
+OLLAMA_QC_HOST <- paste0("http://localhost:", OLLAMA_QC_PORT)
+OLLAMA_QC_MODEL <- "llama3.2:latest"
+
+# Build QC prompt: boolean accurate + Likert scales + JSON (matches 09_text_analysis/02_ai_quality_control.R)
+create_quality_control_prompt <- function(report_text, source_data = NULL) {
+  instructions <- paste0(
+    "You are a quality control validator for AI-generated executive-style reports ",
+    "(brief narratives backed by tabular data—similar to FDA recall summaries or ",
+    "environmental indicator write-ups). Evaluate ONLY the report text against ",
+    "the criteria below. Be strict about numeric fidelity when Source Data is given ",
+    "(matching labels, percentages, and implied totals). Return your assessment as ",
+    "valid JSON. Likert fields must be integers from 1 to 5."
+  )
+  data_context <- ""
+  if (!is.null(source_data) && nchar(source_data) > 0) {
+    data_context <- paste0("\n\nSource Data:\n", source_data, "\n")
+  }
+  criteria <- "
+
+Quality Control Criteria:
+
+1. **accurate** (boolean): TRUE only if every number, label, and implied subtotal matches Source Data when provided (one-decimal rounding allowed). FALSE only for a clear contradiction (wrong percentage, wrong entity, or arithmetic inconsistent with the table—not for tone). If Source Data is missing, use TRUE/FALSE based on internal consistency of the paragraph only.
+
+2. **accuracy** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = many problems interpreting the Data vs. 5 = no misinterpretation of the Data.
+
+3. **formality** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = casual writing vs. 5 = government report writing.
+
+4. **faithfulness** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = makes grandiose claims not supported by the data vs. 5 = makes claims directly related to the data.
+
+5. **clarity** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = confusing writing style vs. 5 = clear and precise.
+
+6. **succinctness** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = unnecessarily wordy vs. 5 = succinct.
+
+7. **relevance** (1-5 Likert scale): Rank the paragraph on a 5-point Likert scale, where 1 = irrelevant commentary vs. 5 = relevant commentary about the data.
+
+Additional checks (fold into scores above):
+- If Source Data includes a table, **recompute any combined category percentages yourself** from the row values before judging **accurate** (e.g., sum relevant % columns); do not guess a combined total.
+- If Source Data is provided, treat small rounding differences (e.g., \"about 12%\" vs 12.1%) as still accurate for **accurate** and high **accuracy**, if the meaning matches.
+- Penalize **faithfulness**, **clarity**, and **formality** for vague phrasing (\"some emissions\"), empty boosterism (\"absolutely essential\"), or claims not tied to the data.
+
+Sanity check: If the report gives the same percentage as your recomputed total for a group, that group is not an error (e.g., 7.3+4.2+0.6 = 12.1 matches \"12.1% combined\").
+
+Return your response as valid JSON in this exact format:
+{
+  \"accurate\": true/false,
+  \"accuracy\": 1-5,
+  \"formality\": 1-5,
+  \"faithfulness\": 1-5,
+  \"clarity\": 1-5,
+  \"succinctness\": 1-5,
+  \"relevance\": 1-5,
+  \"details\": \"0-50 word explanation of your assessment\"
+}
+"
+  paste0(
+    instructions,
+    data_context,
+    "\n\nReport Text to Validate:\n",
+    report_text,
+    criteria
+  )
+}
+
+# Extract JSON object from model text (same idea as str_extract in lab)
+extract_json_from_text <- function(text) {
+  m <- regexpr("\\{[\\s\\S]*\\}", text, perl = TRUE)
+  if (m[1] == -1) {
+    return(text)
+  }
+  regmatches(text, m)[1]
+}
+
+parse_quality_control_results <- function(json_response) {
+  cleaned <- extract_json_from_text(json_response)
+  quality_data <- fromJSON(cleaned)
+  dplyr::tibble(
+    accurate = quality_data$accurate,
+    accuracy = as.numeric(quality_data$accuracy),
+    formality = as.numeric(quality_data$formality),
+    faithfulness = as.numeric(quality_data$faithfulness),
+    clarity = as.numeric(quality_data$clarity),
+    succinctness = as.numeric(quality_data$succinctness),
+    relevance = as.numeric(quality_data$relevance),
+    details = as.character(quality_data$details)
+  )
+}
+
+# OpenAI: structured JSON response for QC
+call_openai_quality_control <- function(prompt, api_key) {
+  body <- list(
+    model = "gpt-4o-mini",
+    messages = list(
+      list(
+        role = "system",
+        content = paste0(
+          "You are a quality control validator. Always return valid JSON only. ",
+          "The boolean accurate must be TRUE if every number in the report matches ",
+          "the source table (after you sum combined categories yourself); set FALSE ",
+          "only when there is a definite mismatch. The details string must not ",
+          "contradict the accurate value."
+        )
+      ),
+      list(role = "user", content = prompt)
+    ),
+    response_format = list(type = "json_object"),
+    temperature = 0
+  )
+  response <- POST(
+    "https://api.openai.com/v1/chat/completions",
+    add_headers(
+      "Authorization" = paste("Bearer", api_key),
+      "Content-Type" = "application/json"
+    ),
+    body = toJSON(body, auto_unbox = TRUE),
+    encode = "raw"
+  )
+  if (http_error(response)) {
+    err <- rawToChar(response$content)
+    stop(paste("OpenAI API error (", status_code(response), "):", err))
+  }
+  result <- fromJSON(rawToChar(response$content))
+  result$choices$message$content[[1]]
+}
+
+# Ollama: JSON format mode (local)
+call_ollama_quality_control <- function(
+    prompt,
+    host = OLLAMA_QC_HOST,
+    model = OLLAMA_QC_MODEL
+  ) {
+  url <- paste0(host, "/api/chat")
+  body <- list(
+    model = model,
+    messages = list(list(role = "user", content = prompt)),
+    format = "json",
+    stream = FALSE
+  )
+  response <- POST(
+    url,
+    body = toJSON(body, auto_unbox = TRUE),
+    encode = "raw",
+    add_headers("Content-Type" = "application/json")
+  )
+  if (http_error(response)) {
+    err <- rawToChar(response$content)
+    stop(paste("Ollama API error (", status_code(response), "):", err))
+  }
+  parsed <- fromJSON(rawToChar(response$content))
+  parsed$message$content
+}
+
+query_ai_quality_control <- function(prompt, provider = "openai", api_key = NULL) {
+  if (provider == "ollama") {
+    call_ollama_quality_control(prompt)
+  } else if (provider == "openai") {
+    if (is.null(api_key) || nchar(api_key) == 0) {
+      stop("OPENAI_API_KEY not set for OpenAI quality control.")
+    }
+    call_openai_quality_control(prompt, api_key)
+  } else {
+    stop("Invalid provider. Use 'ollama' or 'openai'.")
+  }
+}
+
 # ---- Custom CSS ----
 custom_css <- "
 /* Header gradient */
@@ -371,6 +539,16 @@ table.dataTable thead th {
 .ai-report li { margin-bottom: 0.5rem; }
 .ai-report strong { color: #0f172a; }
 .ai-report p { margin-bottom: 0.75rem; }
+.qc-panel {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  border: 1px solid #e9d5ff;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+}
+.qc-panel h6 { color: #6d28d9; font-weight: 600; margin-bottom: 0.75rem; }
+.qc-metric { font-size: 0.9rem; color: #475569; }
+.qc-score { font-weight: 700; color: #1e40af; }
 .btn-ai {
   background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
   border: none;
@@ -532,11 +710,11 @@ ui <- page_fluid(
     )
   ),
   
-  # Row 4: AI Analysis Report
+  # Row 4: AI Analysis Report + AI quality control (09_text_analysis LAB)
   card(
     card_header(
       class = "bg-white",
-      div(class = "d-flex align-items-center justify-content-between",
+      div(class = "d-flex align-items-center justify-content-between flex-wrap gap-2",
           div(icon("robot", class = "me-2"),
               span("AI Analysis Report",
                    style = "color: #7c3aed; font-weight: 600;")),
@@ -545,7 +723,34 @@ ui <- page_fluid(
                        class = "btn-ai btn-sm"))
     ),
     card_body(
-      uiOutput("ai_report_output")
+      layout_columns(
+        col_widths = c(6, 6),
+        gap = "0.75rem",
+        selectInput(
+          "qc_provider",
+          tags$span(icon("microchip", class = "me-1"), "AI QC provider"),
+          choices = c("OpenAI" = "openai", "Ollama (local)" = "ollama"),
+          selected = "openai",
+          width = "100%"
+        ),
+        div(
+          style = "padding-top: 24px;",
+          actionButton(
+            "run_qc",
+            tags$span(icon("clipboard-check"), " Run AI Quality Control"),
+            class = "btn btn-outline-primary w-100",
+            title = "Evaluate the generated report (boolean accuracy + Likert scales)"
+          )
+        )
+      ),
+      tags$p(
+        class = "text-muted small mb-2",
+        "Quality control uses the same JSON criteria as ",
+        tags$code("09_text_analysis/02_ai_quality_control.R"),
+        ": accurate (TRUE/FALSE), accuracy, formality, faithfulness, clarity, succinctness, relevance (1–5), plus an overall score."
+      ),
+      uiOutput("ai_report_output"),
+      uiOutput("qc_output")
     ),
     full_screen = TRUE
   ),
@@ -573,6 +778,7 @@ server <- function(input, output, session) {
   openai_key <- reactiveVal(NULL)
   total_available <- reactiveVal(0)
   report_text <- reactiveVal(NULL)
+  qc_results <- reactiveVal(NULL)
 
   # Load API keys on startup
   observe({
@@ -675,6 +881,7 @@ server <- function(input, output, session) {
         recalls_df(NULL)
         raw_recalls_df(NULL)
         report_text(NULL)
+        qc_results(NULL)
         total_available(0)
         output$status <- renderUI({
           div(class = "alert alert-warning mt-3",
@@ -685,6 +892,7 @@ server <- function(input, output, session) {
         recalls_df(df)
         raw_recalls_df(data$results)
         report_text(NULL)
+        qc_results(NULL)
         total_available(data$meta$results$total)
         output$status <- renderUI({
           div(class = "alert alert-success mt-3",
@@ -697,6 +905,7 @@ server <- function(input, output, session) {
       recalls_df(NULL)
       raw_recalls_df(NULL)
       report_text(NULL)
+      qc_results(NULL)
       total_available(0)
       output$status <- renderUI({
         div(class = "alert alert-danger mt-3",
@@ -963,6 +1172,7 @@ server <- function(input, output, session) {
 
     if (is.null(raw_df) || nrow(raw_df) == 0) {
       report_text(NULL)
+      qc_results(NULL)
       showNotification("Please fetch recall data first.", type = "warning")
       return()
     }
@@ -973,6 +1183,8 @@ server <- function(input, output, session) {
                        duration = 8)
       return()
     }
+
+    qc_results(NULL)
 
     withProgress(message = "Generating AI report...", value = 0, {
       tryCatch({
@@ -992,8 +1204,63 @@ server <- function(input, output, session) {
         showNotification("AI report generated!", type = "message")
       }, error = function(e) {
         report_text(NULL)
+        qc_results(NULL)
         showNotification(paste("Report error:", conditionMessage(e)),
                          type = "error", duration = 10)
+      })
+    })
+  })
+
+  # AI quality control (LAB_ai_quality_control: source data + JSON parse + overall score)
+  observeEvent(input$run_qc, {
+    report <- report_text()
+    raw_df <- raw_recalls_df()
+
+    if (is.null(report) || nchar(report) == 0) {
+      showNotification("Generate an AI report first, then run quality control.", type = "warning")
+      return()
+    }
+    if (is.null(raw_df) || nrow(raw_df) == 0) {
+      showNotification("Recall data is missing. Load data again.", type = "warning")
+      return()
+    }
+
+    oai_key <- openai_key()
+    prov <- input$qc_provider
+    if (prov == "openai" && (is.null(oai_key) || nchar(oai_key) == 0)) {
+      showNotification("OPENAI_API_KEY not found in .env file.", type = "error", duration = 8)
+      return()
+    }
+
+    withProgress(message = "Running AI quality control...", value = 0, {
+      tryCatch({
+        setProgress(0.2, detail = "Building source data context...")
+        source_data <- build_data_summary(raw_df)
+        qc_prompt <- create_quality_control_prompt(report, source_data)
+
+        setProgress(0.5, detail = "Querying AI...")
+        raw_out <- query_ai_quality_control(
+          qc_prompt,
+          provider = prov,
+          api_key = oai_key
+        )
+
+        setProgress(0.85, detail = "Parsing results...")
+        parsed <- parse_quality_control_results(raw_out)
+        likert_cols <- c(
+          "accuracy", "formality", "faithfulness",
+          "clarity", "succinctness", "relevance"
+        )
+        overall <- mean(as.numeric(parsed[1, likert_cols]), na.rm = TRUE)
+        parsed <- parsed %>% mutate(overall_score = round(overall, 2))
+
+        qc_results(parsed)
+        setProgress(1, detail = "Done!")
+        showNotification("AI quality control complete.", type = "message")
+      }, error = function(e) {
+        qc_results(NULL)
+        showNotification(paste("Quality control error:", conditionMessage(e)),
+                         type = "error", duration = 12)
       })
     })
   })
@@ -1018,6 +1285,56 @@ server <- function(input, output, session) {
                            class = "btn btn-outline-secondary btn-sm"))
       )
     }
+  })
+
+  output$qc_output <- renderUI({
+    qr <- qc_results()
+    if (is.null(qr) || nrow(qr) == 0) {
+      return(NULL)
+    }
+    acc_ok <- isTRUE(qr$accurate[1])
+    overall <- qr$overall_score[1]
+    likert <- qr[1, c(
+      "accuracy", "formality", "faithfulness",
+      "clarity", "succinctness", "relevance"
+    )]
+    detail_txt <- as.character(qr$details[1])
+
+    div(
+      class = "qc-panel",
+      tags$h6(icon("check-double"), " AI quality control results"),
+      div(
+        class = "d-flex flex-wrap gap-3 align-items-center mb-2",
+        div(
+          class = "qc-metric",
+          "Accuracy check: ",
+          if (acc_ok) {
+            span(class = "badge bg-success", "PASS (accurate)")
+          } else {
+            span(class = "badge bg-danger", "FAIL (issues)")
+          }
+        ),
+        div(
+          class = "qc-metric",
+          "Overall score (mean of Likert scales): ",
+          span(class = "qc-score", sprintf("%.2f / 5.0", overall))
+        )
+      ),
+      div(
+        class = "row g-2 small qc-metric mb-2",
+        lapply(names(likert), function(nm) {
+          div(
+            class = "col-6 col-md-4",
+            tags$strong(gsub("_", " ", nm), ": "),
+            sprintf("%s / 5", round(as.numeric(likert[[nm]][1]), 1))
+          )
+        })
+      ),
+      div(
+        class = "small text-secondary",
+        tags$strong("Details: "), detail_txt
+      )
+    )
   })
 
   output$download_report <- downloadHandler(

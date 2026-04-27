@@ -120,6 +120,26 @@ tool_get_table = list(
     )
 )
 
+# Define a function to calculate the average of a list of numbers
+# Unlist and convert to numeric since the LLM may pass numbers as a list
+calculate_average = function(numbers){ return(mean(as.numeric(unlist(numbers)))) }
+
+# Define the tool metadata for calculate_average
+tool_calculate_average = list(
+    type = "function",
+    "function" = list(
+        name = "calculate_average",
+        description = "Calculate the average (mean) of a list of numbers",
+        parameters = list(
+            type = "object",
+            required = list("numbers"),
+            properties = list(
+                numbers = list(type = "array", items = list(type = "numeric"), description = "A list of numbers to average")
+            )
+        )
+    )
+)
+
 # tools = list(tool_add_two_numbers); 
 model = "smollm2:1.7b"; 
 
@@ -128,9 +148,9 @@ resp = create_message(role = "user", content = "Write a haiku about cheese.") |>
     agent(model = model, output = "text")
 resp
 
-# Try calling tool #1
+# Try calling tool #1 (use all = TRUE so we can inspect the full response list)
 resp = create_message(role = "user", content = "Add 3 + 5.") |>
-    agent(model = model, output = "tools", tools = list(tool_add_two_numbers))
+    agent(model = model, output = "tools", tools = list(tool_add_two_numbers), all = TRUE)
 resp
 
 resp[[1]]$output
@@ -142,6 +162,14 @@ resp2
 
 # Compare against manual approach
 knitr::kable(data.frame(x = resp[[1]]$output), format = "markdown")
+
+# Try calling tool #3 - our new calculate_average tool
+resp3 = create_message(role = "user", content = "Calculate the average of 10, 20, 30, 40, and 50.") |>
+    agent(model = model, output = "tools", tools = list(tool_calculate_average))
+resp3
+
+# Compare against manual approach
+mean(c(10, 20, 30, 40, 50))
 
 # We can use this agent() function to rapidly build and test out agents with or without tools.
 

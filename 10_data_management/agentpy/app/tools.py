@@ -7,7 +7,10 @@ import os
 import re
 from typing import Any
 
-from crewai_tools import SerperDevTool
+try:
+    from crewai_tools import SerperDevTool
+except ImportError:
+    SerperDevTool = None
 
 from .guardrails import read_skill_file
 
@@ -191,6 +194,11 @@ def run_web_search(query: str) -> str:
     if not q:
         return "web_search error: empty query."
 
+    if SerperDevTool is None:
+        return (
+            "web_search error: crewai_tools is not installed (Python version incompatibility). "
+            "Do not invent URLs; use your training data and state low confidence."
+        )
     try:
         tool = SerperDevTool(n_results=5)
         raw = tool.run(search_query=q)
