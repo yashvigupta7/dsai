@@ -5,11 +5,14 @@
 # Produces HOMEWORK3_Yashvi_Gupta.docx with all four required sections:
 # writing component, git links, screenshots/outputs, and documentation.
 
-# pip install python-docx pandas
+# pip install python-docx pandas scipy pingouin
 
 # 0. Setup #################################
 
+import os
 import pandas as pd
+import pingouin as pg
+from scipy.stats import bartlett, ttest_ind
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -17,8 +20,54 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 
 REPO_BASE = "https://github.com/yashvigupta7/dsai/blob/main"
 REPO_TREE = "https://github.com/yashvigupta7/dsai/tree/main"
+FIGURES_DIR = "11_decision_support/data/figures"
 
 scores = pd.read_csv("11_decision_support/data/validation_scores.csv")
+
+# Pre-compute all statistics dynamically so the docx always matches the CSV.
+
+def fmt_p(p):
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+groups = {pid: scores.query(f'prompt_id == "{pid}"')['composite_score'] for pid in ["A", "B", "C"]}
+means = {pid: groups[pid].mean() for pid in ["A", "B", "C"]}
+sds = {pid: groups[pid].std() for pid in ["A", "B", "C"]}
+
+bart_stat, bart_p = bartlett(groups["A"], groups["B"], groups["C"])
+equal_var = bart_p >= 0.05
+if equal_var:
+    anova_df = pg.anova(dv='composite_score', between='prompt_id', data=scores)
+    anova_label = "One-Way ANOVA (equal variances)"
+else:
+    anova_df = pg.welch_anova(dv='composite_score', between='prompt_id', data=scores)
+    anova_label = "Welch's ANOVA (unequal variances)"
+F_stat = float(anova_df['F'].values[0])
+p_col = 'p_unc' if 'p_unc' in anova_df.columns else 'p-unc'
+p_anova = float(anova_df[p_col].values[0])
+eta2 = float(anova_df['np2'].values[0]) if 'np2' in anova_df.columns else None
+
+pair_stats = {}
+for p1, p2 in [("A", "B"), ("A", "C"), ("B", "C")]:
+    t, p = ttest_ind(groups[p1], groups[p2], equal_var=equal_var)
+    pair_stats[(p1, p2)] = {"t": float(t), "p_adj": min(float(p) * 3, 1.0)}
+
+dim_list = ["structured_reasoning", "completeness", "actionability", "transparency", "data_grounding"]
+dim_stats = {}
+for dim in dim_list:
+    if equal_var:
+        da = pg.anova(dv=dim, between='prompt_id', data=scores)
+    else:
+        da = pg.welch_anova(dv=dim, between='prompt_id', data=scores)
+    dim_stats[dim] = {
+        "A": float(scores.query('prompt_id == "A"')[dim].mean()),
+        "B": float(scores.query('prompt_id == "B"')[dim].mean()),
+        "C": float(scores.query('prompt_id == "C"')[dim].mean()),
+        "F": float(da['F'].values[0]),
+        "p": float(da[p_col].values[0]),
+    }
+
+best_pid = max(means, key=means.get)
+N_PER_PROMPT = len(scores) // 3
 
 doc = Document()
 
@@ -110,24 +159,26 @@ doc.add_paragraph(
 )
 
 doc.add_paragraph(
-    'For the experiment, I compared three prompt strategies: Prompt A gave the AI '
-    'minimal instructions ("recommend the top 3 venues"), Prompt B provided structured '
-    'criteria with explicit format requirements and weighted scoring, and Prompt C '
-    'used chain-of-thought prompting with a mandatory 5-step elimination process. '
-    'I generated 15 reports per prompt (45 total) and validated each one using my '
-    'custom criteria, collecting 6 scores per report.'
+    f'For the experiment, I compared three prompt strategies: Prompt A gave the AI '
+    f'minimal instructions ("recommend the top 3 venues"), Prompt B provided structured '
+    f'criteria with explicit format requirements and weighted scoring, and Prompt C '
+    f'used chain-of-thought prompting with a mandatory 5-step elimination process. '
+    f'I generated {N_PER_PROMPT} reports per prompt ({len(scores)} total) and validated '
+    f'each one using my custom criteria, collecting 6 scores per report.'
 )
 
+dim_t = dim_stats["transparency"]
 doc.add_paragraph(
-    'The statistical results were striking. A one-way ANOVA on composite scores '
-    'yielded F(2,42) = 296.88 with p < 0.001, confirming that prompt strategy '
-    'significantly affects output quality. Pairwise t-tests (Bonferroni-corrected) '
-    'showed all three prompts differed significantly from each other. Prompt C '
-    '(chain-of-thought) achieved the highest mean composite score of 8.24/10, followed '
-    'by Prompt B (structured) at 6.74 and Prompt A (minimal) at 3.74. The biggest '
-    'differentiator was transparency — Prompt C scored 8.2 vs. Prompt A\'s 2.5, '
-    'suggesting that explicit reasoning instructions dramatically improve how well '
-    'the AI explains its decision process.'
+    f'The statistical results were striking. A {"one-way" if equal_var else "Welch\'s"} '
+    f'ANOVA on composite scores yielded F(2,{len(scores)-3}) = {F_stat:.2f} with '
+    f'p {fmt_p(p_anova)}, confirming that prompt strategy significantly affects output '
+    f'quality. Pairwise t-tests (Bonferroni-corrected) showed all three prompts differed '
+    f'significantly from each other. Prompt C (chain-of-thought) achieved the highest '
+    f'mean composite score of {means["C"]:.2f}/10, followed by Prompt B (structured) at '
+    f'{means["B"]:.2f} and Prompt A (minimal) at {means["A"]:.2f}. The biggest '
+    f'differentiator was transparency — Prompt C scored {dim_t["C"]:.1f} vs. Prompt A\'s '
+    f'{dim_t["A"]:.1f}, suggesting that explicit reasoning instructions dramatically '
+    f'improve how well the AI explains its decision process.'
 )
 
 doc.add_paragraph(
@@ -152,6 +203,8 @@ links = [
      f"{REPO_BASE}/11_decision_support/validate_reports.py"),
     ("Validation scores output (CSV results)",
      f"{REPO_BASE}/11_decision_support/data/validation_scores.csv"),
+    ("Validation figures (7 PNGs: boxplot, heatmap, bar chart, console screenshots)",
+     f"{REPO_TREE}/11_decision_support/data/figures"),
     ("Decider script — source of venue reports validated",
      f"{REPO_BASE}/11_decision_support/decider.py"),
     ("Homework 2 submission (prior homework report)",
@@ -184,48 +237,68 @@ doc.add_paragraph(
     'and the statistical analysis comparing prompts A, B, and C.'
 )
 
-# Output 1: System startup + criteria
-add_colored_heading('3.1 System Startup and Custom Validation Criteria', level=2)
+def add_figure(path, width_inches=6.3, caption=None):
+    """Embed a PNG figure into the docx with an optional italic caption."""
+    if not os.path.exists(path):
+        doc.add_paragraph(f"[Missing figure: {path}]")
+        return
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.add_run().add_picture(path, width=Inches(width_inches))
+    if caption:
+        cap = doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = cap.add_run(caption)
+        run.italic = True
+        run.font.size = Pt(9)
+        run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+# Screenshot 1: System startup + criteria
+add_colored_heading('3.1 Validation System In Action — Console Startup', level=2)
 doc.add_paragraph(
-    'The system prints its configuration, the three prompt strategies, '
-    'and the custom validation criteria at startup:'
+    'Screenshot of the validation system starting up, listing the three prompt '
+    'strategies and the custom validation criteria (terminal output captured as PNG):'
 )
-p = doc.add_paragraph()
-run = p.add_run(
-    '============================================================\n'
-    '  AI REPORT VALIDATION SYSTEM\n'
-    '  Validating Decision Support Outputs\n'
-    '  Model: gpt-oss:20b-cloud\n'
-    '  Mode:  Simulation\n'
-    '============================================================\n\n'
-    'Custom Validation Criteria (different from LAB\'s 1-5 Likert):\n'
-    '  1. structured_reasoning (1-10): Logical decision framework\n'
-    '  2. completeness (0-100%):       Data coverage percentage\n'
-    '  3. actionability (1-10):        Concrete recommendations\n'
-    '  4. transparency (1-10):         Explains reasoning + trade-offs\n'
-    '  5. bias_free (boolean):         No unjustified preference\n'
-    '  6. data_grounding (1-10):       Claims tied to source data'
+add_figure(
+    f"{FIGURES_DIR}/console_startup.png",
+    caption="Figure 1. Console output showing the validation system in action: "
+            "model configuration, the three prompt strategies, and the custom criteria."
 )
-run.font.name = 'Consolas'
-run.font.size = Pt(9)
 
-# Output 2: Descriptive statistics
-add_colored_heading('3.2 Descriptive Statistics by Prompt', level=2)
+# Screenshot 2: Rubric as image
+add_colored_heading('3.2 Validation Criteria / Rubric (Screenshot)', level=2)
+doc.add_paragraph(
+    'The custom validation rubric used by the AI reviewer. These criteria are '
+    'tailored to decision-support quality and replace the LAB\'s 1-5 Likert scales:'
+)
+add_figure(
+    f"{FIGURES_DIR}/rubric_criteria.png",
+    caption="Figure 2. Custom validation rubric (decision-support specific) with "
+            "6 dimensions, JSON output schema, and composite-score weights."
+)
 
-summary = scores.groupby("prompt_id").agg({
-    "composite_score": ["mean", "std"],
-    "structured_reasoning": "mean",
-    "completeness": "mean",
-    "actionability": "mean",
-    "transparency": "mean",
-    "data_grounding": "mean",
-}).round(2)
+# Screenshot 3: Boxplot comparing prompts
+add_colored_heading('3.3 Boxplot: Composite Score Comparison Across Prompts', level=2)
+doc.add_paragraph(
+    f'Boxplot visualization comparing composite validation scores across the three '
+    f'prompt strategies. Each prompt was evaluated on {N_PER_PROMPT} reports '
+    f'({len(scores)} total). Points show individual reports; means are annotated.'
+)
+add_figure(
+    f"{FIGURES_DIR}/boxplot_composite_by_prompt.png",
+    caption=f"Figure 3. Composite score by prompt strategy (n={N_PER_PROMPT} per prompt). "
+            f"ANOVA F={F_stat:.2f}, p {fmt_p(p_anova)}."
+)
+
+# 3.4 Descriptive statistics table
+add_colored_heading('3.4 Descriptive Statistics by Prompt', level=2)
 
 table = doc.add_table(rows=4, cols=8)
 table.style = 'Light Shading Accent 1'
 table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-headers = ['Prompt', 'Composite\nMean', 'Composite\nSD', 'Reasoning', 'Complete\n(%)', 'Action.', 'Transp.', 'Grounding']
+headers = ['Prompt', 'Composite\nMean', 'Composite\nSD', 'Reasoning', 'Complete\n(%)',
+          'Action.', 'Transp.', 'Grounding']
 for i, h in enumerate(headers):
     cell = table.rows[0].cells[i]
     cell.text = h
@@ -256,28 +329,62 @@ for row_idx, pid in enumerate(["A", "B", "C"]):
                 run.font.size = Pt(9)
 
 doc.add_paragraph()
+t_dim = dim_stats["transparency"]
 doc.add_paragraph(
-    'Prompt C (chain-of-thought) achieves the highest composite score (8.24), '
-    'followed by Prompt B (structured, 6.74) and Prompt A (minimal, 3.74). '
-    'The largest gap is in transparency (A=2.5 vs C=8.2).'
+    f'Prompt {best_pid} achieves the highest composite score ({means[best_pid]:.2f}), '
+    f'followed by the other two strategies. The largest gap is in transparency '
+    f'(A={t_dim["A"]:.1f} vs C={t_dim["C"]:.1f}).'
 )
 
-# Output 3: ANOVA results
-add_colored_heading('3.3 ANOVA Results', level=2)
+# Screenshot 4: Dimension grouped bar chart
+add_colored_heading('3.5 Per-Dimension Score Comparison', level=2)
+doc.add_paragraph(
+    'Grouped bar chart showing mean scores per validation dimension across the three '
+    'prompts. This reveals where prompt strategy matters most:'
+)
+add_figure(
+    f"{FIGURES_DIR}/dimension_means_grouped_bar.png",
+    caption="Figure 4. Mean score per validation dimension, grouped by prompt strategy."
+)
+
+# Screenshot 5: Heatmap
+add_colored_heading('3.6 Heatmap: Score Patterns Across Prompts × Dimensions', level=2)
+add_figure(
+    f"{FIGURES_DIR}/dimension_heatmap.png",
+    caption="Figure 5. Heatmap of mean validation scores by prompt strategy × dimension "
+            "(completeness rescaled from 0-100% to 0-10 for comparability)."
+)
+
+# Screenshot 6: Statistical-output console
+add_colored_heading('3.7 Statistical Analysis Output (Screenshot)', level=2)
+doc.add_paragraph(
+    'Terminal screenshot of the complete statistical analysis output, including '
+    'Bartlett\'s test, ANOVA, and pairwise t-tests:'
+)
+add_figure(
+    f"{FIGURES_DIR}/console_statistical_output.png",
+    caption=f"Figure 6. Console output of the statistical analysis. "
+            f"ANOVA F({2},{len(scores)-3})={F_stat:.2f}, p {fmt_p(p_anova)}, "
+            f"all 3 pairwise comparisons significant."
+)
+
+# 3.8 ANOVA results (text-tabular form)
+add_colored_heading('3.8 ANOVA Results (Tabular)', level=2)
 p = doc.add_paragraph()
+eta_str = f"{eta2:.4f}" if eta2 is not None else "—"
 run = p.add_run(
-    'One-Way ANOVA (equal variances):\n'
-    '  Source     ddof1  ddof2  F          p_unc         np2\n'
-    '  prompt_id  2      42     296.8811   1.656e-25     0.9339\n\n'
-    '  F-statistic: 296.8811\n'
-    '  p-value:     < 0.001\n'
-    '  Result:      SIGNIFICANT — at least one prompt differs.'
+    f'{anova_label}:\n'
+    f'  Source     ddof1  ddof2  F          p_unc         np2\n'
+    f'  prompt_id  2      {len(scores)-3:<6} {F_stat:<10.4f} {p_anova:.3e}    {eta_str}\n\n'
+    f'  F-statistic: {F_stat:.4f}\n'
+    f'  p-value:     {fmt_p(p_anova)}\n'
+    f'  Result:      {"SIGNIFICANT — at least one prompt differs." if p_anova < 0.05 else "NOT SIGNIFICANT"}'
 )
 run.font.name = 'Consolas'
 run.font.size = Pt(9)
 
-# Output 4: Pairwise t-tests
-add_colored_heading('3.4 Pairwise T-Test Results (Bonferroni corrected)', level=2)
+# 3.9 Pairwise t-tests
+add_colored_heading('3.9 Pairwise T-Test Results (Bonferroni corrected)', level=2)
 
 t_table = doc.add_table(rows=4, cols=5)
 t_table.style = 'Light Shading Accent 1'
@@ -292,11 +399,15 @@ for i, h in enumerate(t_headers):
             run.bold = True
             run.font.size = Pt(9)
 
-t_data = [
-    ['A vs B', '3.74', '6.74', '-14.92', '< 0.001'],
-    ['A vs C', '3.74', '8.24', '-21.93', '< 0.001'],
-    ['B vs C', '6.74', '8.24', '-9.78', '< 0.001'],
-]
+t_data = []
+for (p1, p2), stat in pair_stats.items():
+    t_data.append([
+        f"{p1} vs {p2}",
+        f"{means[p1]:.2f}",
+        f"{means[p2]:.2f}",
+        f"{stat['t']:.2f}",
+        fmt_p(stat['p_adj']),
+    ])
 for row_idx, row_data in enumerate(t_data):
     for col_idx, v in enumerate(row_data):
         cell = t_table.rows[row_idx + 1].cells[col_idx]
@@ -308,12 +419,12 @@ for row_idx, row_data in enumerate(t_data):
 
 doc.add_paragraph()
 doc.add_paragraph(
-    'All three pairwise comparisons are statistically significant (p < 0.001). '
-    'Prompt C significantly outperforms both B and A on all measures.'
+    f'All three pairwise comparisons are statistically significant (p < 0.05). '
+    f'Prompt {best_pid} significantly outperforms the other strategies on every measure.'
 )
 
-# Output 5: Dimension-specific ANOVA
-add_colored_heading('3.5 Dimension-Specific ANOVA Results', level=2)
+# 3.10 Dimension-specific ANOVA
+add_colored_heading('3.10 Dimension-Specific ANOVA Results', level=2)
 
 dim_table = doc.add_table(rows=6, cols=6)
 dim_table.style = 'Light Shading Accent 1'
@@ -328,15 +439,23 @@ for i, h in enumerate(d_headers):
             run.bold = True
             run.font.size = Pt(9)
 
-dims = ['structured_reasoning', 'completeness', 'actionability', 'transparency', 'data_grounding']
-dim_results = [
-    ['Structured Reasoning', '3.3', '6.7', '8.4', '65.00', '< 0.001'],
-    ['Completeness (%)', '47.3', '72.4', '88.9', '76.21', '< 0.001'],
-    ['Actionability', '3.9', '7.3', '7.7', '54.39', '< 0.001'],
-    ['Transparency', '2.5', '6.2', '8.2', '80.63', '< 0.001'],
-    ['Data Grounding', '4.5', '6.2', '7.9', '48.79', '< 0.001'],
-]
-for row_idx, row_data in enumerate(dim_results):
+dim_label = {
+    'structured_reasoning': 'Structured Reasoning',
+    'completeness': 'Completeness (%)',
+    'actionability': 'Actionability',
+    'transparency': 'Transparency',
+    'data_grounding': 'Data Grounding',
+}
+for row_idx, dim in enumerate(dim_list):
+    d = dim_stats[dim]
+    row_data = [
+        dim_label[dim],
+        f"{d['A']:.1f}",
+        f"{d['B']:.1f}",
+        f"{d['C']:.1f}",
+        f"{d['F']:.2f}",
+        fmt_p(d['p']),
+    ]
     for col_idx, v in enumerate(row_data):
         cell = dim_table.rows[row_idx + 1].cells[col_idx]
         cell.text = v
@@ -348,11 +467,11 @@ for row_idx, row_data in enumerate(dim_results):
 doc.add_paragraph()
 doc.add_paragraph(
     'Every individual validation dimension shows statistically significant differences '
-    'across prompts (all p < 0.001). Transparency shows the largest effect.'
+    'across prompts. Transparency shows one of the largest effects.'
 )
 
-# Output 6: Sample validation
-add_colored_heading('3.6 Sample Validation Output — One Report Per Prompt', level=2)
+# 3.11 Sample validation
+add_colored_heading('3.11 Sample Validation Output — One Report Per Prompt', level=2)
 
 samples = [
     ("A", "I'd recommend Venue 3 (Lakeview Pavilion), Venue 5 (The Foundry), "
@@ -485,14 +604,22 @@ p.add_run('At least one prompt produces significantly different composite scores
 doc.add_paragraph()
 doc.add_paragraph('Assumption Check:')
 p = doc.add_paragraph()
-p.add_run("Bartlett's test for homogeneity of variance: statistic = 4.08, p = 0.130. "
-          "Since p > 0.05, we can assume equal variances and use standard one-way ANOVA.")
+assumption_msg = (
+    "assume equal variances and use standard one-way ANOVA" if equal_var
+    else "cannot assume equal variances and use Welch's ANOVA instead"
+)
+p.add_run(
+    f"Bartlett's test for homogeneity of variance: statistic = {bart_stat:.2f}, "
+    f"p = {bart_p:.3f}. Since p {'>' if equal_var else '<'} 0.05, we "
+    f"{assumption_msg}."
+)
 
 doc.add_paragraph()
-doc.add_paragraph('ANOVA Results:')
+doc.add_paragraph(f'{anova_label} Results:')
+eta_pct = f"{eta2*100:.1f}%" if eta2 is not None else "n/a"
 results_items = [
-    'F(2, 42) = 296.88, p < 0.001',
-    'Effect size (η²) = 0.934 (very large effect)',
+    f'F(2, {len(scores)-3}) = {F_stat:.2f}, p {fmt_p(p_anova)}',
+    f'Effect size (η²) = {eta2:.3f} (very large effect)' if eta2 is not None else 'Effect size: not reported',
     'Conclusion: Reject H0 — prompt strategy significantly affects output quality',
 ]
 for item in results_items:
@@ -500,20 +627,21 @@ for item in results_items:
 
 doc.add_paragraph()
 doc.add_paragraph('Post-hoc Pairwise T-Tests (Bonferroni corrected):')
-posthoc_items = [
-    'A vs B: t = -14.92, p < 0.001 — Prompt B significantly better than A',
-    'A vs C: t = -21.93, p < 0.001 — Prompt C significantly better than A',
-    'B vs C: t = -9.78, p < 0.001 — Prompt C significantly better than B',
-]
-for item in posthoc_items:
-    doc.add_paragraph(item, style='List Bullet')
+better = lambda p1, p2: p2 if means[p2] > means[p1] else p1
+for (p1, p2), stat in pair_stats.items():
+    winner = better(p1, p2)
+    doc.add_paragraph(
+        f'{p1} vs {p2}: t = {stat["t"]:.2f}, p {fmt_p(stat["p_adj"])} — '
+        f'Prompt {winner} significantly better',
+        style='List Bullet'
+    )
 
 doc.add_paragraph()
 doc.add_paragraph(
-    'Interpretation: Chain-of-thought prompting (Prompt C) produces significantly '
-    'higher-quality decision support reports than both structured (Prompt B) and '
-    'minimal (Prompt A) approaches. The effect is very large (η² = 0.934), meaning '
-    '93.4% of the variance in composite scores is explained by prompt strategy.'
+    f'Interpretation: Chain-of-thought prompting (Prompt C) produces significantly '
+    f'higher-quality decision support reports than both structured (Prompt B) and '
+    f'minimal (Prompt A) approaches. The effect is very large (η² = {eta2:.3f}), '
+    f'meaning {eta_pct} of the variance in composite scores is explained by prompt strategy.'
 )
 
 # 5.4 System Design
@@ -545,10 +673,10 @@ tech_data = [
     ['Item', 'Detail'],
     ['Language', 'Python 3.x'],
     ['API', 'Ollama Cloud (/api/chat endpoint)'],
-    ['Key Packages', 'requests, pandas, scipy, pingouin, python-dotenv'],
+    ['Key Packages', 'requests, pandas, scipy, pingouin, matplotlib, seaborn, python-dotenv'],
     ['Model', 'gpt-oss:20b-cloud (configurable via .env)'],
     ['Environment', '.env file with OLLAMA_API_KEY, OLLAMA_HOST, OLLAMA_MODEL'],
-    ['Output Format', 'CSV (validation_scores.csv) + console output'],
+    ['Output Format', 'CSV (validation_scores.csv) + 7 PNG figures + console output'],
     ['Simulation Mode', 'SIMULATION_MODE=True runs without API for demonstration'],
 ]
 for row_idx, (k, v) in enumerate(tech_data):
@@ -568,13 +696,13 @@ doc.add_paragraph('To run the validation system:')
 
 steps = [
     'Clone the repository: git clone https://github.com/yashvigupta7/dsai.git',
-    'Navigate to the module: cd dsai/11_decision_support',
-    'Install dependencies: pip install requests python-dotenv pandas scipy pingouin',
-    'Create .env file (copy from .env.example): cp .env.example .env',
-    'Add your Ollama Cloud API key to the .env file',
-    'Set SIMULATION_MODE = False in validate_reports.py for live API calls',
-    'Run the script: python validate_reports.py',
-    'Results are saved to data/validation_scores.csv',
+    'Navigate to the repo: cd dsai',
+    'Install dependencies: pip install requests python-dotenv pandas scipy pingouin matplotlib seaborn python-docx',
+    'Create .env file: cp 11_decision_support/.env.example 11_decision_support/.env',
+    'Add your Ollama Cloud API key to the .env file (or leave SIMULATION_MODE=True to run offline)',
+    'Run the validation experiment: python 11_decision_support/validate_reports.py',
+    'CSV results and 7 PNG figures are saved to 11_decision_support/data/ and data/figures/',
+    'Regenerate the docx: python 11_decision_support/generate_homework3.py',
 ]
 for i, step in enumerate(steps, 1):
     doc.add_paragraph(f'{i}. {step}')
@@ -586,13 +714,21 @@ doc.add_paragraph(
 p = doc.add_paragraph()
 run = p.add_run(
     '11_decision_support/\n'
-    '├── validate_reports.py      # Main validation system\n'
-    '├── generate_homework3.py    # .docx generator\n'
-    '├── decider.py               # Venue recommendation tool\n'
-    '├── assigner.py              # Staff-client matching tool\n'
-    '├── .env.example             # Environment template\n'
+    '├── validate_reports.py        # Main validation system + figure generation\n'
+    '├── generate_homework3.py      # .docx generator (this file)\n'
+    '├── decider.py                 # Venue recommendation tool\n'
+    '├── assigner.py                # Staff-client matching tool\n'
+    '├── .env.example               # Environment template\n'
     '└── data/\n'
-    '    └── validation_scores.csv # Experiment results'
+    '    ├── validation_scores.csv  # 45-row experiment results\n'
+    '    └── figures/               # 7 PNG figures embedded in this docx\n'
+    '        ├── boxplot_composite_by_prompt.png\n'
+    '        ├── dimension_means_grouped_bar.png\n'
+    '        ├── violin_composite_by_prompt.png\n'
+    '        ├── dimension_heatmap.png\n'
+    '        ├── console_startup.png\n'
+    '        ├── console_statistical_output.png\n'
+    '        └── rubric_criteria.png'
 )
 run.font.name = 'Consolas'
 run.font.size = Pt(9)

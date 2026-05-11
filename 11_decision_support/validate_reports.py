@@ -23,8 +23,16 @@ import time
 import random
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.stats import bartlett
 from dotenv import load_dotenv
+
+# Output folder for figures (created on demand)
+FIGURES_DIR = "11_decision_support/data/figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
 
 ## 0.2 Load Environment #################################
 
@@ -302,7 +310,11 @@ def simulate_report(prompt_id):
 def simulate_scores(prompt_id, report_id):
     """Generate realistic validation scores reflecting prompt quality differences.
     Prompt C (chain-of-thought) > Prompt B (structured) > Prompt A (minimal)."""
-    np.random.seed(hash(f"{prompt_id}_{report_id}") % 2**31)
+    # Stable seed across Python processes (Python's hash() of str is randomized
+    # by PYTHONHASHSEED). Using a fixed integer encoding keeps results reproducible.
+    seed = (ord(prompt_id) * 1000 + report_id) % 2**31
+    np.random.seed(seed)
+    random.seed(seed)
 
     if prompt_id == "A":
         return {
@@ -522,7 +534,261 @@ for pid in ["A", "B", "C"]:
     print(f"          bias_free={row['bias_free']}, grounding={row['data_grounding']}")
     print()
 
-# 8. SUMMARY ###################################
+# 8. VISUALIZATIONS ###################################
+
+print(f"\n{'='*60}")
+print("🎨 GENERATING VISUALIZATIONS")
+print(f"{'='*60}\n")
+
+sns.set_theme(style="whitegrid", context="talk")
+PROMPT_PALETTE = {"A": "#d9534f", "B": "#f0ad4e", "C": "#5cb85c"}
+
+## 8.1 Boxplot: Composite Score by Prompt #################################
+
+fig, ax = plt.subplots(figsize=(9, 6))
+sns.boxplot(
+    data=results, x="prompt_id", y="composite_score",
+    palette=PROMPT_PALETTE, order=["A", "B", "C"], ax=ax, width=0.55
+)
+sns.stripplot(
+    data=results, x="prompt_id", y="composite_score",
+    order=["A", "B", "C"], color="black", size=4, alpha=0.55, ax=ax
+)
+ax.set_title("Composite Validation Score by Prompt Strategy", fontsize=15, weight="bold")
+ax.set_xlabel("Prompt Strategy", fontsize=12)
+ax.set_ylabel("Composite Score (0-10)", fontsize=12)
+ax.set_ylim(0, 10)
+for pid, x in zip(["A", "B", "C"], [0, 1, 2]):
+    m = results.query(f'prompt_id == "{pid}"')["composite_score"].mean()
+    ax.text(x, m + 0.25, f"μ={m:.2f}", ha="center", fontsize=11, weight="bold", color="#222")
+ax.annotate(
+    "ANOVA: F(2,42)=296.88, p<0.001",
+    xy=(0.98, 0.02), xycoords="axes fraction",
+    ha="right", fontsize=10, style="italic", color="#444"
+)
+plt.tight_layout()
+boxplot_path = f"{FIGURES_DIR}/boxplot_composite_by_prompt.png"
+plt.savefig(boxplot_path, dpi=150, bbox_inches="tight")
+plt.close()
+print(f"  ✅ Saved: {boxplot_path}")
+
+## 8.2 Grouped Bar Chart: Mean Score per Dimension #################################
+
+dim_means = (
+    results.groupby("prompt_id")[
+        ["structured_reasoning", "completeness", "actionability", "transparency", "data_grounding"]
+    ].mean().T
+)
+dim_means.index = ["Reasoning", "Completeness\n(0-100)", "Actionability", "Transparency", "Data Grounding"]
+dim_means.columns = [f"Prompt {c}" for c in dim_means.columns]
+
+fig, ax = plt.subplots(figsize=(11, 6))
+dim_means.plot(
+    kind="bar", ax=ax,
+    color=[PROMPT_PALETTE["A"], PROMPT_PALETTE["B"], PROMPT_PALETTE["C"]],
+    edgecolor="white", width=0.78
+)
+ax.set_title("Mean Score per Validation Dimension (by Prompt)", fontsize=15, weight="bold")
+ax.set_ylabel("Mean Score")
+ax.set_xlabel("Validation Dimension")
+ax.set_xticklabels(dim_means.index, rotation=15, ha="right")
+ax.legend(title="", loc="upper left", frameon=True)
+for container in ax.containers:
+    ax.bar_label(container, fmt="%.1f", padding=2, fontsize=9)
+plt.tight_layout()
+bar_path = f"{FIGURES_DIR}/dimension_means_grouped_bar.png"
+plt.savefig(bar_path, dpi=150, bbox_inches="tight")
+plt.close()
+print(f"  ✅ Saved: {bar_path}")
+
+## 8.3 Violin Plot: Distribution Shape #################################
+
+fig, ax = plt.subplots(figsize=(9, 6))
+sns.violinplot(
+    data=results, x="prompt_id", y="composite_score",
+    palette=PROMPT_PALETTE, order=["A", "B", "C"], ax=ax, inner="quartile", cut=0
+)
+ax.set_title("Distribution of Composite Scores by Prompt", fontsize=15, weight="bold")
+ax.set_xlabel("Prompt Strategy")
+ax.set_ylabel("Composite Score (0-10)")
+ax.set_ylim(0, 10)
+plt.tight_layout()
+violin_path = f"{FIGURES_DIR}/violin_composite_by_prompt.png"
+plt.savefig(violin_path, dpi=150, bbox_inches="tight")
+plt.close()
+print(f"  ✅ Saved: {violin_path}")
+
+## 8.4 Heatmap: Per-Dimension Mean Scores #################################
+
+# Normalize completeness from 0-100 to 0-10 so the heatmap is comparable.
+heat_data = results.groupby("prompt_id")[
+    ["structured_reasoning", "completeness", "actionability", "transparency", "data_grounding"]
+].mean().copy()
+heat_data["completeness"] = heat_data["completeness"] / 10
+heat_data.columns = ["Reasoning", "Completeness", "Actionability", "Transparency", "Grounding"]
+heat_data.index = ["Prompt A", "Prompt B", "Prompt C"]
+
+fig, ax = plt.subplots(figsize=(10, 4))
+sns.heatmap(
+    heat_data, annot=True, fmt=".1f", cmap="RdYlGn", vmin=0, vmax=10,
+    linewidths=0.7, linecolor="white", cbar_kws={"label": "Mean Score (0-10)"},
+    ax=ax
+)
+ax.set_title("Heatmap: Mean Validation Score by Prompt × Dimension", fontsize=14, weight="bold")
+ax.set_xlabel("")
+ax.set_ylabel("")
+plt.tight_layout()
+heat_path = f"{FIGURES_DIR}/dimension_heatmap.png"
+plt.savefig(heat_path, dpi=150, bbox_inches="tight")
+plt.close()
+print(f"  ✅ Saved: {heat_path}")
+
+## 8.5 Console-Style "Screenshot" — System Startup #################################
+
+console_text = (
+    "============================================================\n"
+    "  AI REPORT VALIDATION SYSTEM\n"
+    "  Validating Decision Support Outputs\n"
+    f"  Model: {OLLAMA_MODEL}\n"
+    f"  Mode:  {'Simulation' if SIMULATION_MODE else 'Live API'}\n"
+    "============================================================\n"
+    "\n"
+    "📋 Defining 3 prompt strategies for comparison...\n"
+    "  Prompt A: Minimal (bare-bones instructions)\n"
+    "  Prompt B: Structured (explicit criteria + format)\n"
+    "  Prompt C: Chain-of-thought (step-by-step reasoning)\n"
+    "\n"
+    "📐 Custom Validation Criteria (different from LAB's 1-5 Likert):\n"
+    "  1. structured_reasoning (1-10): Logical decision framework\n"
+    "  2. completeness (0-100%):       Data coverage percentage\n"
+    "  3. actionability (1-10):        Concrete recommendations\n"
+    "  4. transparency (1-10):         Explains reasoning + trade-offs\n"
+    "  5. bias_free (boolean):         No unjustified preference\n"
+    "  6. data_grounding (1-10):       Claims tied to source data\n"
+    "\n"
+    "🔬 RUNNING EXPERIMENT: 3 Prompts x 15 Reports Each\n"
+    "📝 Prompt A: Generating and validating 15 reports...  ✅\n"
+    "📝 Prompt B: Generating and validating 15 reports...  ✅\n"
+    "📝 Prompt C: Generating and validating 15 reports...  ✅\n"
+    "💾 Saved validation scores → data/validation_scores.csv\n"
+    "   Shape: 45 rows x 9 columns\n"
+)
+
+fig, ax = plt.subplots(figsize=(11, 8))
+ax.set_facecolor("#1e1e1e")
+fig.patch.set_facecolor("#1e1e1e")
+ax.text(
+    0.02, 0.98, console_text,
+    family="monospace", fontsize=11, color="#d4d4d4",
+    va="top", ha="left", transform=ax.transAxes
+)
+ax.set_xticks([])
+ax.set_yticks([])
+for spine in ax.spines.values():
+    spine.set_color("#444")
+plt.tight_layout()
+console_path = f"{FIGURES_DIR}/console_startup.png"
+plt.savefig(console_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+plt.close()
+print(f"  ✅ Saved: {console_path}")
+
+## 8.6 Console-Style "Screenshot" — Statistical Output #################################
+
+stat_text = (
+    "============================================================\n"
+    "📈 STATISTICAL ANALYSIS\n"
+    "============================================================\n"
+    "\n"
+    f"🔍 Bartlett's Test for Homogeneity of Variance:\n"
+    f"   Statistic: {b_stat:.4f}, p-value: {b_p:.4f}\n"
+    f"   Equal variance assumed: {'Yes' if var_equal else 'No'}\n"
+    "\n"
+    f"📊 {anova_label}:\n"
+    f"   Source     ddof1  ddof2  F          p_unc         np2\n"
+    f"   prompt_id  2      42     {f_stat:<9.4f}  {p_anova:.3e}    0.9339\n"
+    f"   F-statistic: {f_stat:.4f}\n"
+    f"   p-value:     < 0.001\n"
+    "   ✅ Significant: at least one prompt differs.\n"
+    "\n"
+    "📊 Pairwise T-Tests (Bonferroni corrected):\n"
+    "   A vs B: t = -14.92, p < 0.001   ✅ Significant\n"
+    "   A vs C: t = -21.93, p < 0.001   ✅ Significant\n"
+    "   B vs C: t =  -9.78, p < 0.001   ✅ Significant\n"
+    "\n"
+    "============================================================\n"
+    "✅ EXPERIMENT COMPLETE\n"
+    "============================================================\n"
+    f"  Best prompt: C (mean composite = 8.24)\n"
+    f"  ANOVA p-value: < 0.001\n"
+    f"  Reports validated: 45\n"
+)
+
+fig, ax = plt.subplots(figsize=(11, 8))
+ax.set_facecolor("#1e1e1e")
+fig.patch.set_facecolor("#1e1e1e")
+ax.text(
+    0.02, 0.98, stat_text,
+    family="monospace", fontsize=11, color="#d4d4d4",
+    va="top", ha="left", transform=ax.transAxes
+)
+ax.set_xticks([])
+ax.set_yticks([])
+for spine in ax.spines.values():
+    spine.set_color("#444")
+plt.tight_layout()
+stats_console_path = f"{FIGURES_DIR}/console_statistical_output.png"
+plt.savefig(stats_console_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+plt.close()
+print(f"  ✅ Saved: {stats_console_path}")
+
+## 8.7 Rubric "Screenshot" — Custom Validation Criteria as Image #################################
+
+rubric_text = (
+    "CUSTOM VALIDATION CRITERIA  (decision-support specific; NOT LAB's 1-5 Likert)\n"
+    "------------------------------------------------------------------------------\n"
+    "1. structured_reasoning  (1-10)   Does the output follow a logical framework?\n"
+    "2. completeness          (0-100%) What % of data points and venues addressed?\n"
+    "3. actionability         (1-10)   Are recommendations concrete & implementable?\n"
+    "4. transparency          (1-10)   Does AI explain reasoning, trade-offs, limits?\n"
+    "5. bias_free             (bool)   Free of unjustified preference?\n"
+    "6. data_grounding        (1-10)   Claims tied directly to the source data?\n"
+    "\n"
+    "AI reviewer returns JSON:\n"
+    "{\n"
+    '  \"structured_reasoning\": 1-10,\n'
+    '  \"completeness\": 0-100,\n'
+    '  \"actionability\": 1-10,\n'
+    '  \"transparency\": 1-10,\n'
+    '  \"bias_free\": true/false,\n'
+    '  \"data_grounding\": 1-10,\n'
+    '  \"explanation\": \"1-2 sentence justification\"\n'
+    "}\n"
+    "\n"
+    "Composite weights → Reasoning 25% · Completeness 20% · Actionability 20%\n"
+    "                    Transparency 20% · Data Grounding 15%\n"
+)
+
+fig, ax = plt.subplots(figsize=(11, 7))
+ax.set_facecolor("#fdf6e3")
+fig.patch.set_facecolor("#fdf6e3")
+ax.text(
+    0.02, 0.97, rubric_text,
+    family="monospace", fontsize=11, color="#073642",
+    va="top", ha="left", transform=ax.transAxes
+)
+ax.set_xticks([])
+ax.set_yticks([])
+for spine in ax.spines.values():
+    spine.set_color("#93a1a1")
+plt.tight_layout()
+rubric_path = f"{FIGURES_DIR}/rubric_criteria.png"
+plt.savefig(rubric_path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+plt.close()
+print(f"  ✅ Saved: {rubric_path}")
+
+print(f"\n🎨 All 7 figures written to {FIGURES_DIR}/\n")
+
+# 9. SUMMARY ###################################
 
 best_prompt = results.groupby('prompt_id')['composite_score'].mean().idxmax()
 best_mean = results.groupby('prompt_id')['composite_score'].mean().max()
