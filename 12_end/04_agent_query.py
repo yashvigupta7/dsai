@@ -11,6 +11,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR / "08_function_calling"))
 
 from dotenv import load_dotenv
+import functions as _fn_mod
 from functions import agent
 
 import requests
@@ -39,10 +40,12 @@ def predict_vehicle_count(day_of_week, hours_of_day):
             timeout=10,
         )
         resp.raise_for_status()
+        raw = resp.json()["predicted_vehicle_count"]
+        value = raw[0] if isinstance(raw, list) else raw
         predictions.append(
             {
                 "hour_of_day": hour,
-                "predicted_vehicle_count": float(resp.json()["predicted_vehicle_count"]),
+                "predicted_vehicle_count": float(value),
             }
         )
 
@@ -80,7 +83,10 @@ tool_predict_vehicle_count = {
     }
 }
 
-# 4. RUN AGENT ###################################
+# 4. REGISTER TOOL & RUN AGENT ###################################
+
+# Inject into functions module so agent() can find it via globals()
+_fn_mod.predict_vehicle_count = predict_vehicle_count
 
 messages = [
     {
@@ -94,7 +100,7 @@ messages = [
     },
     {
         "role": "user",
-        "content": "Predict Brussels vehicle count for Monday for every hour (0 through 23).",
+        "content": "Predict Brussels vehicle count for Monday (day 1) at hour 8.",
     }
 ]
 tools = [tool_predict_vehicle_count]
@@ -110,8 +116,8 @@ print("Agent result:", result)
 
 # 5. VERIFY ###################################
 
-direct = predict_vehicle_count(day_of_week=1, hours_of_day=list(range(24)))
-print("Direct API call predictions returned:", len(direct["predictions"]))
-print(f"Sample one-minute vehicle count: {direct['predictions'][8]['predicted_vehicle_count']} (1m/t1 at Monday 08:00)")
+direct = predict_vehicle_count(day_of_week=1, hours_of_day=[8])
+print("Direct API call:", direct)
+print(f"Direct prediction: {direct['predictions'][0]['predicted_vehicle_count']} vehicles (1m/t1 at Monday 08:00)")
 print("Unit:", UNIT_NOTE)
-print("Match:", str(direct["predictions"][8]["predicted_vehicle_count"]) in str(result))
+print("Match:", str(direct["predictions"][0]["predicted_vehicle_count"]) in str(result))
