@@ -83,38 +83,41 @@ def add_colored_heading(text, level=1):
         run.font.color.rgb = RGBColor(0x1A, 0x47, 0x8A)
     return h
 
-# Helper to add a hyperlink
-def add_hyperlink(paragraph, url, text):
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def add_hyperlink(paragraph, url, text, font_size_pt=9):
+    """Insert a real clickable hyperlink into the paragraph (blue+underlined)."""
     part = paragraph.part
     r_id = part.relate_to(
         url,
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         is_external=True
     )
-    hyperlink = paragraph._element.makeelement(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink",
-        {"{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id": r_id}
-    )
-    new_run = paragraph._element.makeelement(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r", {}
-    )
-    rPr = paragraph._element.makeelement(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr", {}
-    )
-    c = paragraph._element.makeelement(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}color",
-        {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "0563C1"}
-    )
-    u = paragraph._element.makeelement(
-        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}u",
-        {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "single"}
-    )
-    rPr.append(c)
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '0563C1')
+    rPr.append(color)
+    u = OxmlElement('w:u')
+    u.set(qn('w:val'), 'single')
     rPr.append(u)
+    sz = OxmlElement('w:sz')
+    sz.set(qn('w:val'), str(font_size_pt * 2))
+    rPr.append(sz)
     new_run.append(rPr)
-    new_run.text = text
+
+    t = OxmlElement('w:t')
+    t.text = text
+    t.set(qn('xml:space'), 'preserve')
+    new_run.append(t)
+
     hyperlink.append(new_run)
-    paragraph._element.append(hyperlink)
+    paragraph._p.append(hyperlink)
+    return hyperlink
 
 # 1. TITLE PAGE #################################
 
@@ -221,9 +224,7 @@ for label, url_str in links:
     p = doc.add_paragraph(style='List Bullet')
     run = p.add_run(f'{label}: ')
     run.bold = True
-    link_run = p.add_run(url_str)
-    link_run.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
-    link_run.font.size = Pt(9)
+    add_hyperlink(p, url_str, url_str, font_size_pt=9)
 
 doc.add_paragraph('─' * 60)
 

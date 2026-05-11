@@ -32,24 +32,42 @@ def add_bold_line(text):
     return p
 
 def add_hyperlink(paragraph, text, url):
-    """Add an actual clickable hyperlink to a paragraph."""
+    """Add a real clickable hyperlink (blue+underlined) using OxmlElement."""
+    from docx.oxml import OxmlElement
     part = paragraph.part
-    r_id = part.relate_to(url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
-    hyperlink = paragraph._element.makeelement(qn("w:hyperlink"), {qn("r:id"): r_id})
-    new_run = paragraph._element.makeelement(qn("w:r"), {})
-    rPr = paragraph._element.makeelement(qn("w:rPr"), {})
-    c = paragraph._element.makeelement(qn("w:color"), {qn("w:val"): "0563C1"})
-    u = paragraph._element.makeelement(qn("w:u"), {qn("w:val"): "single"})
-    rFonts = paragraph._element.makeelement(qn("w:rFonts"), {qn("w:ascii"): "Calibri", qn("w:hAnsi"): "Calibri"})
-    sz = paragraph._element.makeelement(qn("w:sz"), {qn("w:val"): "22"})
-    rPr.append(c)
+    r_id = part.relate_to(
+        url,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        is_external=True,
+    )
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '0563C1')
+    rPr.append(color)
+    u = OxmlElement('w:u')
+    u.set(qn('w:val'), 'single')
     rPr.append(u)
+    rFonts = OxmlElement('w:rFonts')
+    rFonts.set(qn('w:ascii'), 'Calibri')
+    rFonts.set(qn('w:hAnsi'), 'Calibri')
     rPr.append(rFonts)
+    sz = OxmlElement('w:sz')
+    sz.set(qn('w:val'), '22')
     rPr.append(sz)
     new_run.append(rPr)
-    new_run.text = text
+
+    t = OxmlElement('w:t')
+    t.text = text
+    t.set(qn('xml:space'), 'preserve')
+    new_run.append(t)
+
     hyperlink.append(new_run)
-    paragraph._element.append(hyperlink)
+    paragraph._p.append(hyperlink)
+    return hyperlink
 
 def add_link_paragraph(label, url):
     p = doc.add_paragraph()
@@ -517,6 +535,8 @@ add_body(
 
 # ── Save ──────────────────────────────────────────────────
 
-output_path = "HOMEWORK2_Yashvi_Gupta.docx"
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+output_path = os.path.join(SCRIPT_DIR, "HOMEWORK2_Yashvi_Gupta.docx")
 doc.save(output_path)
 print(f"Saved: {output_path}")
