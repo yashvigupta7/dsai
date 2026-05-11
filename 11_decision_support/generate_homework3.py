@@ -253,16 +253,17 @@ def add_figure(path, width_inches=6.3, caption=None):
         run.font.size = Pt(9)
         run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
-# Screenshot 1: System startup + criteria
-add_colored_heading('3.1 Validation System In Action — Console Startup', level=2)
+# Screenshot 1: System startup + criteria (REAL Terminal screenshot)
+add_colored_heading('3.1 Validation System In Action — Live Terminal Run', level=2)
 doc.add_paragraph(
-    'Screenshot of the validation system starting up, listing the three prompt '
-    'strategies and the custom validation criteria (terminal output captured as PNG):'
+    'Live screenshot of the validation system running in Terminal.app, showing '
+    'system startup, the three prompt strategies, the custom validation criteria, '
+    'and the experiment loop generating 15 reports per prompt:'
 )
 add_figure(
-    f"{FIGURES_DIR}/console_startup.png",
-    caption="Figure 1. Console output showing the validation system in action: "
-            "model configuration, the three prompt strategies, and the custom criteria."
+    f"{FIGURES_DIR}/real_terminal_1_startup.png",
+    caption="Figure 1. Live terminal output: validation system in action — "
+            "model config, prompt strategies, custom criteria, and the experiment loop."
 )
 
 # Screenshot 2: Rubric as image
@@ -355,15 +356,15 @@ add_figure(
             "(completeness rescaled from 0-100% to 0-10 for comparability)."
 )
 
-# Screenshot 6: Statistical-output console
-add_colored_heading('3.7 Statistical Analysis Output (Screenshot)', level=2)
+# Screenshot 6: Live statistical-output terminal (REAL)
+add_colored_heading('3.7 Statistical Analysis Output — Live Terminal Run', level=2)
 doc.add_paragraph(
-    'Terminal screenshot of the complete statistical analysis output, including '
-    'Bartlett\'s test, ANOVA, and pairwise t-tests:'
+    'Live screenshot of the descriptive statistics, Bartlett\'s test, one-way ANOVA, '
+    'and Bonferroni-corrected pairwise t-tests as produced by the running script:'
 )
 add_figure(
-    f"{FIGURES_DIR}/console_statistical_output.png",
-    caption=f"Figure 6. Console output of the statistical analysis. "
+    f"{FIGURES_DIR}/real_terminal_2_stats.png",
+    caption=f"Figure 6. Live terminal output of the statistical analysis. "
             f"ANOVA F({2},{len(scores)-3})={F_stat:.2f}, p {fmt_p(p_anova)}, "
             f"all 3 pairwise comparisons significant."
 )
@@ -519,6 +520,36 @@ for pid, report, score_str in samples:
     run3.font.size = Pt(9)
     run3.italic = True
     doc.add_paragraph()
+
+# 3.12 Additional live terminal screenshots
+add_colored_heading('3.12 Additional Live Terminal Screenshots', level=2)
+doc.add_paragraph(
+    'The following live screenshots show the remaining stages of the running script: '
+    'dimension-specific ANOVA, sample validation output, figure generation, and the '
+    'final experiment-complete summary.'
+)
+
+add_figure(
+    f"{FIGURES_DIR}/real_terminal_3_dimension_anova.png",
+    caption="Figure 7. Live terminal output of the per-dimension ANOVA — every "
+            "validation criterion shows a statistically significant difference "
+            "across prompts (all p < 0.001)."
+)
+add_figure(
+    f"{FIGURES_DIR}/real_terminal_4_sample_validation.png",
+    caption="Figure 8. Live terminal output of one sample validation per prompt, "
+            "with the validation scores returned by the AI reviewer."
+)
+add_figure(
+    f"{FIGURES_DIR}/real_terminal_5_visualizations.png",
+    caption="Figure 9. Live terminal output showing the figure-generation step "
+            "writing 7 PNG visualizations to data/figures/."
+)
+add_figure(
+    f"{FIGURES_DIR}/real_terminal_6_complete.png",
+    caption="Figure 10. Live terminal output of the final experiment-complete "
+            "summary: best prompt = C, ANOVA p ≈ 0, 45 reports validated."
+)
 
 doc.add_paragraph('─' * 60)
 
