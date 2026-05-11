@@ -473,29 +473,37 @@ doc.add_paragraph(
 # 3.11 Sample validation
 add_colored_heading('3.11 Sample Validation Output — One Report Per Prompt', level=2)
 
-samples = [
-    ("A", "I'd recommend Venue 3 (Lakeview Pavilion), Venue 5 (The Foundry), "
-     "and Venue 6 (Sunrise Farm). They're all in budget and have outdoor space.",
-     "reasoning=5, completeness=52%, actionability=2, transparency=3, "
-     "bias_free=True, grounding=4, composite=3.89"),
-    ("B", "| Venue | Capacity | Price | Outdoor | Catering | Fit Score |\n"
-     "Sunrise Farm & Vineyard (Score: 8/10) — Romantic vineyard setting with "
-     "outdoor terrace and in-house catering. Slightly over budget at $9,800 but "
-     "best vibe and catering match.\nThe Foundry at Millworks (Score: 7/10) — "
-     "Under budget at $5,000 with rooftop cocktail hour.\nTrade-offs: Sunrise Farm "
-     "maximizes romance but exceeds budget by $1,800.",
-     "reasoning=7, completeness=81%, actionability=7, transparency=7, "
-     "bias_free=False, grounding=7, composite=7.22"),
-    ("C", "Step 1: Extract Key Attributes — [table of all 6 venues]\n"
-     "Step 2: Eliminate — Rosewood ($17.5k) OUT, Grand Metro ($12k) OUT, "
-     "Thornfield ($18k) OUT\nStep 3: Score remaining on 5 criteria (1-10)\n"
-     "Step 4: Weighted totals — Sunrise 7.45, Foundry 7.1, Lakeview 6.2\n"
-     "Step 5: Final — Sunrise Farm #1 (best romantic vibe + catering), "
-     "Foundry #2 (best budget pick), Lakeview #3 (beautiful but capacity concern).\n"
-     "Exclusion note: 3 venues eliminated in Step 2 due to budget.",
-     "reasoning=9, completeness=99%, actionability=8, transparency=7, "
-     "bias_free=True, grounding=8, composite=8.43"),
-]
+sample_excerpts = {
+    "A": "I'd recommend Venue 3 (Lakeview Pavilion), Venue 5 (The Foundry), "
+         "and Venue 6 (Sunrise Farm). They're all in budget and have outdoor space.",
+    "B": "| Venue | Capacity | Price | Outdoor | Catering | Fit Score |\n"
+         "Sunrise Farm & Vineyard (Score: 8/10) — Romantic vineyard setting with "
+         "outdoor terrace and in-house catering. Slightly over budget at $9,800 but "
+         "best vibe and catering match.\nThe Foundry at Millworks (Score: 7/10) — "
+         "Under budget at $5,000 with rooftop cocktail hour.\nTrade-offs: Sunrise Farm "
+         "maximizes romance but exceeds budget by $1,800.",
+    "C": "Step 1: Extract Key Attributes — [table of all 6 venues]\n"
+         "Step 2: Eliminate — Rosewood ($17.5k) OUT, Grand Metro ($12k) OUT, "
+         "Thornfield ($18k) OUT\nStep 3: Score remaining on 5 criteria (1-10)\n"
+         "Step 4: Weighted totals — Sunrise 7.45, Foundry 7.1, Lakeview 6.2\n"
+         "Step 5: Final — Sunrise Farm #1 (best romantic vibe + catering), "
+         "Foundry #2 (best budget pick), Lakeview #3 (beautiful but capacity concern).\n"
+         "Exclusion note: 3 venues eliminated in Step 2 due to budget.",
+}
+
+samples = []
+for pid in ["A", "B", "C"]:
+    row = scores.query(f'prompt_id == "{pid}"').iloc[0]
+    score_str = (
+        f"reasoning={row['structured_reasoning']}, "
+        f"completeness={row['completeness']}%, "
+        f"actionability={row['actionability']}, "
+        f"transparency={row['transparency']}, "
+        f"bias_free={row['bias_free']}, "
+        f"grounding={row['data_grounding']}, "
+        f"composite={row['composite_score']}"
+    )
+    samples.append((pid, sample_excerpts[pid], score_str))
 
 for pid, report, score_str in samples:
     p = doc.add_paragraph()
